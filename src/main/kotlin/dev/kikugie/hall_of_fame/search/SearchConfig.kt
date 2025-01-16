@@ -14,7 +14,6 @@ data class SearchConfig(
         @SerialName("excluded_owners") val excludedOwners: Set<String> = emptySet(),
         @SerialName("excluded_names") val excludedNames: Set<String> = emptySet(),
         @SerialName("excluded_repos") val excludedRepos: Set<String> = emptySet(),
-        @SerialName("required_files") val requiredFiles: Set<String> = emptySet(),
         @SerialName("disallowed_words") val disallowedWords: List<String> = emptyList(),
     ) {
         fun allowProject(project: GitHubProject) = project.value !in excludedRepos
@@ -22,6 +21,6 @@ data class SearchConfig(
                 && project.repo !in excludedNames
                 && disallowedWords.none { it in project.repo.lowercase() }
 
-        fun allowFile(file: String) = "src/" !in file && file.substringAfterLast('/') in requiredFiles
+        fun allowFile(file: String) = "src/" !in file
     }
 }
