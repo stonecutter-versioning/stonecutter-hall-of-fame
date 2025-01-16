@@ -19,3 +19,30 @@ dependencies {
 kotlin {
     jvmToolchain(16)
 }
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "kikugieMaven"
+            url = uri("https://maven.kikugie.dev/snapshots")
+            credentials(PasswordCredentials::class)
+            authentication {
+                create("basic", BasicAuthentication::class)
+            }
+        }
+    }
+
+    publications {
+        register("mavenJava", MavenPublication::class) {
+            groupId = project.group.toString()
+            artifactId = "hall-of-fame"
+            version = project.version.toString()
+            from(components["java"])
+        }
+    }
+}
