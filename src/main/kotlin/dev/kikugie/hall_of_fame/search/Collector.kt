@@ -9,7 +9,7 @@ import kotlinx.coroutines.coroutineScope
 
 object Collector {
     suspend fun get(githubToken: String, config: SearchConfig, cache: List<SearchEntry>) = coroutineScope {
-        val mutable = cache.toMutableList().patch(config.entries)
+        val mutable = cache.toMutableSet().patch(config.entries)
         GitHub.get(githubToken, config.repositories, mutable)
         val (mr, cf) = listOf(async { Modrinth.get(mutable) }, async { CurseForge.get(mutable) }).awaitAll()
         mutable.toList() to mutable.mapNotNull {
@@ -24,17 +24,22 @@ object Collector {
         }
     }
 
-    private fun MutableList<SearchEntry>.patch(other: List<SearchEntry>): MutableList<SearchEntry> {
-        val mapped = associateBy { it.name.value }
-        other.forEach {
-            val match = mapped[it.name.value] ?: run { add(it); return@forEach }
-            if (!it.valid) { match.valid = false; return@forEach }
-            if (it.name is Overridden) match.name = it.name
-            if (it.source is Overridden) match.source = it.source
-            if (it.modrinth is Overridden) match.modrinth = it.modrinth
-            if (it.curseforge is Overridden) match.curseforge = it.curseforge
-        }
+    private fun MutableCollection<SearchEntry>.patch(other: List<SearchEntry>): MutableCollection<SearchEntry> {
+        associateBy { it.name.value }
+            .let { m -> other.applyPatch(this) { m[it.name.value] } }
+        filter { it.source !is Excluded && it.source.value.isNotBlank() }
+            .associateBy { it.source.value }
+            .let { m -> other.applyPatch(this) { m[it.source.value] } }
         return this
+    }
+
+    private fun List<SearchEntry>.applyPatch(bin: MutableCollection<SearchEntry>, mapping: (SearchEntry) -> SearchEntry?) = forEach {
+        val match = mapping(it) ?: run { bin.add(it); return@forEach }
+        if (!it.valid) { match.valid = false; return@forEach }
+        if (it.name is Overridden) match.name = it.name
+        if (it.source is Overridden) match.source = it.source
+        if (it.modrinth is Overridden) match.modrinth = it.modrinth
+        if (it.curseforge is Overridden) match.curseforge = it.curseforge
     }
 
     private fun SearchEntry.patch(info: ProjectInfo) {

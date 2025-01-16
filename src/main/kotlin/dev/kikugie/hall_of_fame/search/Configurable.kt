@@ -67,8 +67,8 @@ object ConfigurableSerializer : KSerializer<Configurable> {
         "%EXCLUDED%" -> Excluded
         else -> when {
             it.startsWith(Verified.PREFIX) -> Verified(it.drop(1))
-            it.startsWith(Overridden.PREFIX) -> Overridden(it.drop(1))
-            else -> Uncertain(it)
+            it.startsWith(Uncertain.PREFIX) -> Uncertain(it.drop(1))
+            else -> Overridden(it)
         }
     }
 }
