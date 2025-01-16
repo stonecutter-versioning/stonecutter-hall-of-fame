@@ -1,6 +1,7 @@
 package dev.kikugie.hall_of_fame
 
 import com.github.ajalt.mordant.rendering.TextStyle
+import dev.kikugie.hall_of_fame.search.SearchEntry
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import org.apache.commons.text.similarity.LevenshteinDistance
@@ -56,3 +57,4 @@ inline fun <T> Iterable<T>.toArrayString(crossinline transform: (T) -> CharSeque
     joinToString(", ", "[", "]") { transform(it) }
 
 val JsonElement.string get() = jsonPrimitive.content
+fun Iterable<SearchEntry>.associate() = associateBy { it.id }

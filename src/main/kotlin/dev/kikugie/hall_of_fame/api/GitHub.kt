@@ -16,26 +16,25 @@ object GitHub {
     private const val PAGE_SIZE = 100
     private const val URL = "https://api.github.com/search/code"
 
-    suspend fun get(token: String, config: SearchConfig.RepositoryRequirements, entries: MutableCollection<SearchEntry>) {
+    suspend fun get(token: String, config: SearchConfig.RepositoryRequirements, entries: MutableMap<SearchID, SearchEntry>): Map<SearchID, SearchEntry> {
         printStyled(brightCyan, "Searching for projects on GitHub...")
         val (files, time) = measureTimedValue {
             merge(queryStonecutter(token, "gradle"), queryStonecutter(token, "kts")).toList()
         }
         printStyled(brightCyan, "Found ${files.size} matching files in $time.")
 
-        // Extract known entries with GitHub projects to prevent duplicates
-        val mapped = entries.mapNotNull { e ->
-            e.source
-                .takeIf { "github.com" in it.value }
-                ?.let { GitHubProject(it.value) to e }
-        }.toMap()
-        val valid = files.groupBy { it.project }.count { (project, files) ->
-            val entry = mapped[project] ?: SearchEntry
-                .create { name = uncertain(project.repo); source = verified(project.url) }
-                .also { entries += it }
+        val valid = files.groupBy { it.project }.count { (project: GitHubProject, files: List<GitHubEntry>) ->
+            val entry = entries[project.value]?.apply {
+                if (!name.isPresent) name = uncertain(project.repo)
+                if (!source.isKnown) source = verified(project.url)
+            } ?: SearchEntry.create(project.value) {
+                name = uncertain(project.repo)
+                source = verified(project.url)
+            }.also { entries[project.value] = it }
             entry.isValidRepository(config, project, files)
         }
         printStyled(brightCyan, "Found $valid valid projects.")
+        return entries.toMap()
     }
 
     private fun SearchEntry.isValidRepository(

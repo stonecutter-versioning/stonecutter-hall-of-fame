@@ -3,43 +3,44 @@ package dev.kikugie.hall_of_fame.search
 import dev.kikugie.hall_of_fame.api.CurseForge
 import dev.kikugie.hall_of_fame.api.GitHub
 import dev.kikugie.hall_of_fame.api.Modrinth
+import dev.kikugie.hall_of_fame.associate
+import dev.kikugie.hall_of_fame.then
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
 object Collector {
     suspend fun get(githubToken: String, config: SearchConfig, cache: List<SearchEntry>) = coroutineScope {
-        val mutable = cache.toMutableSet().patch(config.entries)
-        GitHub.get(githubToken, config.repositories, mutable)
-        val (mr, cf) = listOf(async { Modrinth.get(mutable) }, async { CurseForge.get(mutable) }).awaitAll()
-        mutable.toList() to mutable.mapNotNull {
-            var mrInfo = mr[it]
-            var cfInfo = cf[it]
-            if (mrInfo != null) it.patch(mrInfo)
-            if (cfInfo != null) it.patch(cfInfo)
-            if (mrInfo != null && cfInfo != null) mrInfo.merge(cfInfo).apply(it)
-            else mrInfo?.apply(it) ?: cfInfo?.apply(it)
-        }.also {
-            mutable.forEach { println(it.report() + "\n") }
+        val searches = cache.associate().toMutableMap().patch(config.entries)
+            .let { GitHub.get(githubToken, config.repositories, it).values }
+
+        val (mr, cf) = awaitAll(
+            async { Modrinth.get(searches) },
+            async { CurseForge.get(searches) }
+        )
+        val projects = searches.mapNotNull { it -> it.patch(mr[it.id], cf[it.id]) }.toMap().also {
+            searches.forEach { println(it.report() + "\n") }
         }
+        searches to projects
     }
 
-    private fun MutableCollection<SearchEntry>.patch(other: List<SearchEntry>): MutableCollection<SearchEntry> {
-        associateBy { it.name.value }
-            .let { m -> other.applyPatch(this) { m[it.name.value] } }
-        filter { it.source !is Excluded && it.source.value.isNotBlank() }
-            .associateBy { it.source.value }
-            .let { m -> other.applyPatch(this) { m[it.source.value] } }
-        return this
+    private fun MutableMap<SearchID, SearchEntry>.patch(overrides: List<SearchEntry>) = apply {
+        overrides.associate().forEach { id, entry -> this[id]?.patch(entry) ?: put(id, entry) }
     }
 
-    private fun List<SearchEntry>.applyPatch(bin: MutableCollection<SearchEntry>, mapping: (SearchEntry) -> SearchEntry?) = forEach {
-        val match = mapping(it) ?: run { bin.add(it); return@forEach }
-        if (!it.valid) { match.valid = false; return@forEach }
-        if (it.name is Overridden) match.name = it.name
-        if (it.source is Overridden) match.source = it.source
-        if (it.modrinth is Overridden) match.modrinth = it.modrinth
-        if (it.curseforge is Overridden) match.curseforge = it.curseforge
+    private fun SearchEntry.patch(modrinth: ProjectInfo?, curseforge: ProjectInfo?) = when {
+        modrinth != null && curseforge != null -> modrinth.merge(curseforge)
+        modrinth != null -> modrinth
+        curseforge != null -> curseforge
+        else -> null
+    }?.apply(this)?.let { patch(it) then id to it }
+
+    private fun SearchEntry.patch(override: SearchEntry) {
+        if (!override.valid) valid = false then return
+        name = override.name
+        source = override.source
+        modrinth = override.modrinth
+        curseforge = override.curseforge
     }
 
     private fun SearchEntry.patch(info: ProjectInfo) {
@@ -59,7 +60,10 @@ object Collector {
         source = source ?: other.source,
         modrinth = modrinth ?: other.modrinth,
         curseforge = curseforge ?: other.curseforge,
-    )
+    ).apply {
+        internal.putAll(this@merge.internal)
+        internal.putAll(other.internal)
+    }
 
     private fun ProjectInfo.apply(entry: SearchEntry) = ProjectInfo(
         title = if (entry.name is Overridden) entry.name.value else title,
@@ -70,5 +74,7 @@ object Collector {
         source = if (entry.source is Overridden) entry.source.value else source,
         modrinth = if (entry.modrinth is Overridden) entry.modrinth.value else modrinth,
         curseforge = if (entry.curseforge is Overridden) entry.curseforge.value else curseforge,
-    )
+    ).also {
+        it.internal.putAll(this@apply.internal)
+    }
 }

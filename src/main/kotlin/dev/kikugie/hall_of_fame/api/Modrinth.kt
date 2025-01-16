@@ -5,8 +5,8 @@ import dev.kikugie.hall_of_fame.printStyled
 import dev.kikugie.hall_of_fame.search.Excluded
 import dev.kikugie.hall_of_fame.search.ProjectInfo
 import dev.kikugie.hall_of_fame.search.SearchEntry
+import dev.kikugie.hall_of_fame.search.SearchID
 import dev.kikugie.hall_of_fame.similarTo
-import dev.kikugie.hall_of_fame.toArrayString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -20,69 +20,78 @@ import kotlin.collections.flatten
 import kotlin.collections.map
 
 object Modrinth {
-    suspend fun get(entries: Iterable<SearchEntry>): Map<SearchEntry, ProjectInfo> {
+    suspend fun get(entries: Collection<SearchEntry>): Map<SearchID, ProjectInfo> = coroutineScope {
         val grouped = entries.filter { it.modrinth !is Excluded && it.valid }.groupBy { it.slug != null }
-        printStyled(
-            brightCyan, "Searching for projects on Modrinth... (%d excluded, %d known, %d unknown)"
-                .format(entries.count { it.modrinth is Excluded }, grouped[true]?.size ?: 0, grouped[false]?.size ?: 0)
-        )
-        val remaining = ConcurrentHashMap.newKeySet<SearchEntry>().apply { addAll(grouped.values.flatten()) }
-        return merge(getKnown(grouped[true], remaining), getUnknown(grouped[false], remaining)).toList().toMap().also {
+        "Searching for projects on Modrinth... (%d excluded, %d known, %d unknown)"
+            .format(entries.size - grouped.values.sumOf { it.size }, grouped[true]?.size ?: 0, grouped[false]?.size ?: 0)
+            .let { printStyled(brightCyan, it) }
+
+        val remaining = grouped.values.flatten().map { it.id }.let {
+            ConcurrentHashMap.newKeySet<SearchID>(it.size).apply { addAll(it) }
+        }
+        buildMap {
+            awaitAll(
+                async { getKnown(grouped[true], remaining) },
+                async { getUnknown(grouped[false], remaining) }
+            ).forEach { this += it }
+        }.also {
             printStyled(brightCyan, "Fetched ${it.size} matching projects from Modrinth.")
-            if (remaining.isNotEmpty())
-                printStyled(brightRed, "Failed to fetch ${remaining.size} Modrinth projects: ${remaining.toArrayString { it.name.value }}")
+            if (remaining.isNotEmpty()) buildString {
+                appendLine("Failed to fetch ${remaining.size} Modrinth projects:")
+                remaining.forEach { appendLine(" - $it") }
+            }.let { printStyled(brightRed, it) }
         }
     }
 
-    private suspend fun getKnown(entries: Iterable<SearchEntry>?, remaining: MutableCollection<SearchEntry>) = coroutineScope {
-        if (entries == null) return@coroutineScope emptyFlow()
+    private suspend fun getKnown(entries: Iterable<SearchEntry>?, remaining: MutableCollection<SearchID>) = coroutineScope {
+        if (entries == null) return@coroutineScope emptyMap()
         val mapped = entries.associateBy { it.slug!! }
         val url = "https://api.modrinth.com/v2/projects?ids=${mapped.keys.joinToString(",", "[", "]") { "\"$it\"" }}"
-        async(Dispatchers.IO) { Client.get<List<ModrinthProject>>(url) }.await().onFailure {
+        async(Dispatchers.IO) { Client.get<List<ModrinthProject>>(url) }.await().getOrElse {
             printStyled(red, it.message ?: "Unknown ${it::class.simpleName}")
-            return@coroutineScope emptyFlow()
-        }.getOrThrow().asFlow().mapNotNull {
-            mapped[it.slug]?.let { entry ->
-                remaining -= entry
-                entry.log(green, "Fetched known Modrinth ${it.title} (${it.url})")
-                entry to it.toInfo()
-            }
+            return@coroutineScope emptyMap()
+        }.filter {
+            mapped[it.slug] != null
+        }.associate {
+            val entry = mapped[it.slug]!!
+            remaining -= entry.id
+            entry.log(green, "Fetched known Modrinth ${it.title} (${it.url})")
+            entry.id to it.toInfo()
         }
     }
 
-    private suspend fun getUnknown(entries: Iterable<SearchEntry>?, remaining: MutableCollection<SearchEntry>) = coroutineScope {
-        if (entries == null) return@coroutineScope emptyFlow()
-        val failed = ConcurrentHashMap<SearchEntry, MutableSet<String>>().apply {
-            entries.associateWithTo(this) { mutableSetOf() }
+    private suspend fun getUnknown(entries: Iterable<SearchEntry>?, remaining: MutableCollection<SearchID>) = coroutineScope {
+        if (entries == null) return@coroutineScope emptyMap()
+        val failed = ConcurrentHashMap<SearchID, MutableSet<String>>().apply {
+            entries.associateTo(this) { it.id to mutableSetOf() }
         }
         var entries = entries.map {
-            async(Dispatchers.IO) { it to search(it, it.name.value, failed[it]!!) }
+            async(Dispatchers.IO) { it to search(it, it.name.value, failed) }
         }.awaitAll()
         entries = entries.map { (it, project) ->
             if (project != null) async { it to project }
-            else async(Dispatchers.IO) { it to search(it, it.searchableName, failed[it]!!) }
+            else async(Dispatchers.IO) { it to search(it, it.searchableName, failed) }
         }.awaitAll()
-        entries.asFlow().mapNotNull { (entry, project) ->
-            failed[entry]?.takeIf { it.isNotEmpty() }?.let {
-                entry.log(yellow, "Modrinth search failed for '${entry.name.value}'. Hits:\n${it.take(20).joinToString("\n")}")
-            }
-
-            project?.let {
-                remaining -= entry
-                entry.log(green, "Fetched unknown Modrinth ${it.title} (${it.url})")
-                entry to it.toInfo()
-            }
+        entries.onEach { (entry, _) ->
+            val messages = failed[entry.id]?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: return@onEach
+            entry.log(yellow, "Modrinth search failed for '${entry.name.value}'. Hits:\n${messages.take(20).joinToString("\n")}")
+        }.filter { (_, project) ->
+            project != null
+        }.associate { (entry, project) ->
+            remaining -= entry.id
+            entry.log(green, "Fetched unknown Modrinth ${project!!.title} (${project.url})")
+            entry.id to project.toInfo()
         }
     }
 
-    private suspend fun search(entry: SearchEntry, mod: String, collector: MutableCollection<String>): ModrinthProject? {
+    private suspend fun search(entry: SearchEntry, mod: String, collector: MutableMap<SearchID, MutableSet<String>>): ModrinthProject? {
         val url = "https://api.modrinth.com/v2/search?query=$mod&facets=[[\"project_type:mod\"]]"
         val result = Client.get<ModrinthSearch>(url).getOrElse {
             entry.log(red, "Modrinth search failed: ${it.stackTraceToString()}")
             return null
         }
         return result.hits.firstOrNull { mod similarTo it.slug || mod similarTo it.title } ?: run {
-            collector.addAll(result.hits.map { "${it.title} (${it.url})" })
+            collector.getOrPut(entry.id) { mutableSetOf() } += result.hits.map { "${it.title} (${it.url})" }
             null
         }
     }

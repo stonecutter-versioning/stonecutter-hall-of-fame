@@ -6,8 +6,11 @@ import dev.kikugie.hall_of_fame.spaceWords
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
+typealias SearchID = String
+
 @Serializable
 data class SearchEntry(
+    var id: SearchID,
     var valid: Boolean = true,
     var name: Configurable = Uncertain(""),
     var source: Configurable = Uncertain(""),
@@ -36,7 +39,6 @@ data class SearchEntry(
     }.lineSequence().filter(String::isNotBlank).joinToString("\n")
 
     companion object {
-        fun empty() = SearchEntry()
-        inline fun create(block: SearchEntry.() -> Unit) = empty().apply(block)
+        inline fun create(id: SearchID, block: SearchEntry.() -> Unit) = SearchEntry(id).apply(block)
     }
 }

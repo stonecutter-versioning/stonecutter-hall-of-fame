@@ -16,7 +16,7 @@ fun verified(value: String) = Verified(value)
 sealed interface Configurable : ValueSerializable<String> {
     val prefixed: String
 
-    val isKnown: Boolean get() = this is Verified || this is Overridden
+    val isKnown: Boolean get() = this !is Uncertain
     val isPresent: Boolean get() = this !is Excluded && value.isNotBlank()
 }
 
