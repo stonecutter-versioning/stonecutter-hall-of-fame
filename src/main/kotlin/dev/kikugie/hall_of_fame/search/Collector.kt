@@ -25,9 +25,10 @@ object Collector {
     }
 
     private fun MutableList<SearchEntry>.patch(other: List<SearchEntry>): MutableList<SearchEntry> {
-        val mapped = associateBy { it.name }
+        val mapped = associateBy { it.name.value }
         other.forEach {
-            val match = mapped[it.name] ?: run { add(it); return@forEach }
+            val match = mapped[it.name.value] ?: run { add(it); return@forEach }
+            if (!it.valid) { match.valid = false; return@forEach }
             if (it.name is Overridden) match.name = it.name
             if (it.source is Overridden) match.source = it.source
             if (it.modrinth is Overridden) match.modrinth = it.modrinth

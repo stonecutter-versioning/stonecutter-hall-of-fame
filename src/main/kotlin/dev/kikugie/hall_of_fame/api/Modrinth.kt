@@ -37,7 +37,7 @@ object Modrinth {
     private suspend fun getKnown(entries: Iterable<SearchEntry>?, remaining: MutableCollection<SearchEntry>) = coroutineScope {
         if (entries == null) return@coroutineScope emptyFlow()
         val mapped = entries.associateBy { it.slug!! }
-        val url = "https://api.modrinth.com/v2/projects?ids${mapped.keys.joinToString(",", "[", "]") { "\"$it\"" }}"
+        val url = "https://api.modrinth.com/v2/projects?ids=${mapped.keys.joinToString(",", "[", "]") { "\"$it\"" }}"
         async(Dispatchers.IO) { Client.get<List<ModrinthProject>>(url) }.await().onFailure {
             printStyled(red, it.message ?: "Unknown ${it::class.simpleName}")
             return@coroutineScope emptyFlow()
@@ -96,7 +96,8 @@ object Modrinth {
     private data class ModrinthProject(
         val slug: String,
         val title: String,
-        val updated: String,
+        val updated: String? = null,
+        @SerialName("date_modified") val modified: String? = null,
         val description: String,
         val downloads: Int,
         @SerialName("icon_url") val iconUrl: String,
@@ -108,7 +109,7 @@ object Modrinth {
             title = title,
             description = description,
             icon = iconUrl,
-            updated = Instant.parse(updated),
+            updated = Instant.parse(updated ?: modified!!),
             downloads = downloads,
             source = sourceUrl,
             modrinth = "https://modrinth.com/mod/$slug",

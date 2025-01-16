@@ -6,6 +6,7 @@ import dev.kikugie.hall_of_fame.search.Excluded
 import dev.kikugie.hall_of_fame.search.ProjectInfo
 import dev.kikugie.hall_of_fame.search.SearchEntry
 import dev.kikugie.hall_of_fame.similarTo
+import dev.kikugie.hall_of_fame.string
 import dev.kikugie.hall_of_fame.toArrayString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -16,6 +17,9 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.MediaType
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.ConcurrentHashMap
 
 object CurseForge {
@@ -24,7 +28,7 @@ object CurseForge {
     private const val BASE = "https://api.curseforge.com/v1/mods/search?gameId=432&%s=%s"
 
     suspend fun get(entries: Iterable<SearchEntry>): Map<SearchEntry, ProjectInfo> {
-        val grouped = entries.filter { it.curseforge !is Excluded && it.valid }.groupBy { it.slug != null }
+        val grouped = entries.filter { it.curseforge !is Excluded && it.valid }.groupBy { it.id != null }
         printStyled(
             brightCyan, "Searching for projects on CurseForge... (%d excluded, %d known, %d unknown)"
                 .format(entries.count { it.curseforge is Excluded }, grouped[true]?.size ?: 0, grouped[false]?.size ?: 0)
@@ -40,8 +44,14 @@ object CurseForge {
     private suspend fun getKnown(entries: Iterable<SearchEntry>?, remaining: MutableCollection<SearchEntry>) = coroutineScope {
         if (entries == null) return@coroutineScope emptyFlow()
         val mapped = entries.associateBy { it.id!! }
-        val url = "https://api.curseforge.com/v1/mods?{\"modIds\":$${mapped.keys.joinToString(",", "[", "]") { "\"$it\"" }}"
-        async(Dispatchers.IO) { Client.get<CurseforgeSearch>(url).map { it.data } }.await().onFailure {
+        val url = "https://api.curseforge.com/v1/mods"
+        val json = "{\"modIds\":${mapped.keys.joinToString(",", "[", "]") { "\"$it\"" }}}"
+        val parameters = Client.parameters {
+            method = "POST"
+            headers["x-api-key"] = KEY
+            body = json.toRequestBody("application/json".toMediaType())
+        }
+        async(Dispatchers.IO) { Client.get<CurseforgeSearch>(url, parameters).map { it.data } }.await().onFailure {
             printStyled(red, it.message ?: "Unknown ${it::class.simpleName}")
             return@coroutineScope emptyFlow()
         }.getOrThrow().asFlow().mapNotNull {
@@ -86,7 +96,8 @@ object CurseForge {
 
     private suspend fun search(entry: SearchEntry, mod: String, type: String, collector: MutableCollection<String>): CurseforgeProject? {
         val url = "https://api.curseforge.com/v1/mods/search?gameId=432&$type=$mod"
-        val result = Client.get<CurseforgeSearch>(url, mapOf("x-api-key" to KEY)).getOrElse {
+        val parameters = Client.parameters { headers["x-api-key"] = KEY }
+        val result = Client.get<CurseforgeSearch>(url, parameters).getOrElse {
             entry.log(red, "CurseForge search error: ${it.stackTraceToString()}")
             return null
         }
@@ -114,13 +125,13 @@ object CurseForge {
         val logo: JsonObject?,
         val links: JsonObject?,
     ) {
-        val url get() = links?.get("websiteUrl")?.toString() ?: "https://www.curseforge.com/minecraft/mc-mods/$slug"
+        val url get() = links?.get("websiteUrl")?.string ?: "https://www.curseforge.com/minecraft/mc-mods/$slug"
         val isValid get() = url.let { "mc-mods" in it || "bukkit-plugins" in it }
 
         fun toInfo() = ProjectInfo(
             title = name,
             description = summary,
-            icon = (logo?.get("url") as? JsonPrimitive)?.content ?: "",
+            icon = (logo?.get("url") as? JsonPrimitive)?.string ?: "",
             updated = Instant.parse(dateModified),
             downloads = downloadCount,
             source = links?.get("sourceUrl").toString(),

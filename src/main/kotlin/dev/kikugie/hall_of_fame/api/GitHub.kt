@@ -14,7 +14,7 @@ import kotlin.time.measureTimedValue
 
 object GitHub {
     private const val PAGE_SIZE = 100
-    private const val BASE = "https://api.github.com/search/code?per_page=$PAGE_SIZE&page=%d&q=%s"
+    private const val URL = "https://api.github.com/search/code"
 
     suspend fun get(token: String, config: SearchConfig.RepositoryRequirements, entries: MutableCollection<SearchEntry>) {
         printStyled(brightCyan, "Searching for projects on GitHub...")
@@ -56,14 +56,15 @@ object GitHub {
     }
 
     private fun queryStonecutter(token: String, extension: String) = flow {
-        val headers = mapOf(
-            "Authorization" to "Bearer $token",
-            "Accept" to "application/vnd.github+json",
-            "X-GitHub-Api-Version" to "2022-11-28"
-        )
+        val parameters = Client.parameters {
+            headers["Accept"] = "application/vnd.github+json"
+            headers["X-GitHub-Api-Version"] = "2022-11-28"
+            headers["Authorization"] = "Bearer $token"
+        }
         var current = 1
         do {
-            val response = Client.get<GitHubRootResponse>(BASE.format(current, "filename:stonecutter extension:$extension"), headers)
+            val url = "$URL?per_page=$PAGE_SIZE&page=$current&q=filename:stonecutter extension:$extension"
+            val response = Client.get<GitHubRootResponse>(url, parameters)
                 .recover {
                     if (it.message?.contains("API rate limit") != true) throw it
                     else {

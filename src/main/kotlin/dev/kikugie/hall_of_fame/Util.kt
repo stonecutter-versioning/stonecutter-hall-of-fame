@@ -1,6 +1,8 @@
 package dev.kikugie.hall_of_fame
 
 import com.github.ajalt.mordant.rendering.TextStyle
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonPrimitive
 import org.apache.commons.text.similarity.LevenshteinDistance
 import kotlin.math.max
 
@@ -52,3 +54,5 @@ private fun String.similarity(other: String): Double {
 
 inline fun <T> Iterable<T>.toArrayString(crossinline transform: (T) -> CharSequence = { it.toString() }) =
     joinToString(", ", "[", "]") { transform(it) }
+
+val JsonElement.string get() = jsonPrimitive.content
