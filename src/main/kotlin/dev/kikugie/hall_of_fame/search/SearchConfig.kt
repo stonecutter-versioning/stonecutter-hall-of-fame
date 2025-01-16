@@ -6,7 +6,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SearchConfig(
-    val repositories: RepositoryRequirements = RepositoryRequirements()
+    val repositories: RepositoryRequirements = RepositoryRequirements(),
+    val entries: List<SearchEntry> = emptyList()
 ) {
     @Serializable
     data class RepositoryRequirements(

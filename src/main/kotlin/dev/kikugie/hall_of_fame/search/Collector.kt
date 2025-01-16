@@ -8,8 +8,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
 object Collector {
-    suspend fun get(githubToken: String, config: SearchConfig, entries: List<SearchEntry>) = coroutineScope {
-        val mutable = entries.toMutableList()
+    suspend fun get(githubToken: String, config: SearchConfig, cache: List<SearchEntry>) = coroutineScope {
+        val mutable = cache.toMutableList().patch(config.entries)
         GitHub.get(githubToken, config.repositories, mutable)
         val (mr, cf) = listOf(async { Modrinth.get(mutable) }, async { CurseForge.get(mutable) }).awaitAll()
         mutable.toList() to mutable.mapNotNull {
@@ -22,6 +22,18 @@ object Collector {
         }.also {
             mutable.forEach { println(it.report() + "\n") }
         }
+    }
+
+    private fun MutableList<SearchEntry>.patch(other: List<SearchEntry>): MutableList<SearchEntry> {
+        val mapped = associateBy { it.name }
+        other.forEach {
+            val match = mapped[it.name] ?: run { add(it); return@forEach }
+            if (it.name is Overridden) match.name = it.name
+            if (it.source is Overridden) match.source = it.source
+            if (it.modrinth is Overridden) match.modrinth = it.modrinth
+            if (it.curseforge is Overridden) match.curseforge = it.curseforge
+        }
+        return this
     }
 
     private fun SearchEntry.patch(info: ProjectInfo) {
