@@ -2,6 +2,7 @@
 kotlin = "2.1.0"
 serialization = "1.8.0"
 coroutines = "1.10.1"
+datetime="0.6.1"
 okhttp = "4.12.0"
 commons = "1.12.0"
 kaml = "0.60.0"
@@ -14,6 +15,7 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 [libraries]
 kotlin-serialization = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json-jvm", version.ref = "serialization" }
 kotlin-coroutines = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core-jvm", version.ref = "coroutines" }
+kotlin-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime-jvm", version.ref = "datetime" }
 kaml = { group = "com.charleskorn.kaml", name = "kaml", version.ref = "kaml" }
 mordant = { group = "com.github.ajalt.mordant", name = "mordant", version.ref = "mordant" }
 commons-text = { group = "org.apache.commons", name = "commons-text", version.ref = "commons" }
@@ -23,6 +25,7 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 default = [
     "kotlin-coroutines",
     "kotlin-serialization",
+    "kotlin-datetime",
     "kaml",
     "mordant",
     "commons-text",

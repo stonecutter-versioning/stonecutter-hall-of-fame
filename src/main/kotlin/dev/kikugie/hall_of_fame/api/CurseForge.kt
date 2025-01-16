@@ -12,6 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
+import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -108,19 +109,21 @@ object CurseForge {
         val slug: String,
         val name: String,
         val summary: String,
-        val links: Map<String, String?>,
+        val dateModified: String,
         val downloadCount: Int,
         val logo: JsonObject?,
+        val links: JsonObject?,
     ) {
-        val url get() = links["websiteUrl"] ?: "https://www.curseforge.com/minecraft/mc-mods/$slug"
+        val url get() = links?.get("websiteUrl")?.toString() ?: "https://www.curseforge.com/minecraft/mc-mods/$slug"
         val isValid get() = url.let { "mc-mods" in it || "bukkit-plugins" in it }
 
         fun toInfo() = ProjectInfo(
             title = name,
             description = summary,
             icon = (logo?.get("url") as? JsonPrimitive)?.content ?: "",
+            updated = Instant.parse(dateModified),
             downloads = downloadCount,
-            source = links["sourceUrl"],
+            source = links?.get("sourceUrl").toString(),
             modrinth = null,
             curseforge = url
         ).apply {

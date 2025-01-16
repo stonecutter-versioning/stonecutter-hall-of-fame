@@ -12,6 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
+import kotlinx.datetime.Instant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.concurrent.ConcurrentHashMap
@@ -95,8 +96,9 @@ object Modrinth {
     private data class ModrinthProject(
         val slug: String,
         val title: String,
-        val downloads: Int,
+        val updated: String,
         val description: String,
+        val downloads: Int,
         @SerialName("icon_url") val iconUrl: String,
         @SerialName("source_url") val sourceUrl: String? = null,
     ) {
@@ -106,6 +108,7 @@ object Modrinth {
             title = title,
             description = description,
             icon = iconUrl,
+            updated = Instant.parse(updated),
             downloads = downloads,
             source = sourceUrl,
             modrinth = "https://modrinth.com/mod/$slug",
