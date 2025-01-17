@@ -1,18 +1,22 @@
 package dev.kikugie.hall_of_fame.search
 
+import com.github.ajalt.mordant.rendering.TextColors
 import dev.kikugie.hall_of_fame.api.CurseForge
 import dev.kikugie.hall_of_fame.api.GitHub
 import dev.kikugie.hall_of_fame.api.Modrinth
 import dev.kikugie.hall_of_fame.associate
+import dev.kikugie.hall_of_fame.printStyled
 import dev.kikugie.hall_of_fame.then
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 
 object Collector {
-    suspend fun get(githubToken: String, config: SearchConfig, cache: List<SearchEntry>) = coroutineScope {
-        val searches = cache.associate().toMutableMap().patch(config.entries)
-            .let { GitHub.get(githubToken, config.repositories, it).values }
+    suspend fun get(githubToken: String?, config: SearchConfig, cache: List<SearchEntry>) = coroutineScope {
+        val searches = cache.associate().toMutableMap().patch(config.entries).let {
+            if (githubToken == null) it.values
+            else GitHub.get(githubToken, config.repositories, it).values
+        }
 
         val (mr, cf) = awaitAll(
             async { Modrinth.get(searches) },
@@ -21,6 +25,7 @@ object Collector {
         val projects = searches.mapNotNull { it -> it.patch(mr[it.id], cf[it.id]) }.toMap().also {
             searches.forEach { println(it.report() + "\n") }
         }
+        printStyled(TextColors.brightCyan, "Fetched ${projects.size} matching projects from all APIs.")
         searches to projects
     }
 
@@ -66,14 +71,14 @@ object Collector {
     }
 
     private fun ProjectInfo.apply(entry: SearchEntry) = ProjectInfo(
-        title = if (entry.name is Overridden) entry.name.value else title,
+        title = if (entry.name.isKnown) entry.name.value else title,
         description = description,
         icon = icon,
         updated = updated,
         downloads = downloads,
-        source = if (entry.source is Overridden) entry.source.value else source,
-        modrinth = if (entry.modrinth is Overridden) entry.modrinth.value else modrinth,
-        curseforge = if (entry.curseforge is Overridden) entry.curseforge.value else curseforge,
+        source = if (entry.source.let { it.isKnown && it !is Excluded }) entry.source.value else source,
+        modrinth = if (entry.modrinth.let { it.isKnown && it !is Excluded }) entry.modrinth.value else modrinth,
+        curseforge = if (entry.curseforge.let { it.isKnown && it !is Excluded }) entry.curseforge.value else curseforge,
     ).also {
         it.internal.putAll(this@apply.internal)
     }
