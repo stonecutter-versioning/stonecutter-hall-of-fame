@@ -14,8 +14,10 @@ import kotlinx.coroutines.coroutineScope
 object Collector {
     suspend fun get(githubToken: String?, config: SearchConfig, cache: List<SearchEntry>) = coroutineScope {
         val searches = cache.associate().toMutableMap().patch(config.entries).let {
-            if (githubToken == null) it.values
-            else GitHub.get(githubToken, config.repositories, it).values
+            if (githubToken != null) GitHub.get(githubToken, config.repositories, it).values
+            else it.values.onEach {
+                if (!it.name.isKnown) it.name = uncertain(it.id.substringAfter('/'))
+            }
         }
 
         val (mr, cf) = awaitAll(
