@@ -20,6 +20,7 @@ import kotlin.collections.flatten
 import kotlin.collections.map
 
 object Modrinth {
+    private const val MOD_ID = "https://github.com/FabricMC/fabric-example-mod/blob/1.21/src/main/resources/assets/modid/icon.png?raw=true"
     suspend fun get(entries: Collection<SearchEntry>): Map<SearchID, ProjectInfo> = coroutineScope {
         val grouped = entries.filter { it.modrinth !is Excluded && it.valid }.groupBy { it.slug != null }
         "Searching for projects on Modrinth... (%d excluded, %d known, %d unknown)"
@@ -109,7 +110,7 @@ object Modrinth {
         @SerialName("date_modified") val modified: String? = null,
         val description: String,
         val downloads: Int,
-        @SerialName("icon_url") val iconUrl: String,
+        @SerialName("icon_url") val iconUrl: String?,
         @SerialName("source_url") val sourceUrl: String? = null,
     ) {
         val url get() = "https://modrinth.com/mod/$slug"
@@ -117,7 +118,7 @@ object Modrinth {
         fun toInfo() = ProjectInfo(
             title = title,
             description = description,
-            icon = iconUrl,
+            icon = iconUrl ?: MOD_ID,
             updated = Instant.parse(updated ?: modified!!),
             downloads = downloads,
             source = sourceUrl,

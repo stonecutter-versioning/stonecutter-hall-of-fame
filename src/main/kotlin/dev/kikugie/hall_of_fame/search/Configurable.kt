@@ -22,7 +22,7 @@ sealed interface Configurable : ValueSerializable<String> {
 
 @Serializable
 data object Excluded : Configurable {
-    override val value: String = "%EXCLUDED%"
+    override val value: String = "/EXCLUDED/"
     override val prefixed: String get() = value
     override fun toString(): String = "Excluded()"
 }
@@ -30,33 +30,29 @@ data object Excluded : Configurable {
 @Serializable
 @JvmInline
 value class Overridden(override val value: String) : Configurable {
-    override val prefixed: String get() = "${PREFIX}$value"
+    override val prefixed: String get() = value
     override fun toString(): String = "Overridden($value)"
-
-    companion object {
-        const val PREFIX = ""
-    }
 }
 
 @Serializable
 @JvmInline
 value class Uncertain(override val value: String) : Configurable {
-    override val prefixed: String get() = "$PREFIX$value"
+    override val prefixed: String get() = "$PREFIX $value"
     override fun toString(): String = "Uncertain($value)"
 
     companion object {
-        const val PREFIX = "?"
+        const val PREFIX = "(?)"
     }
 }
 
 @Serializable
 @JvmInline
 value class Verified(override val value: String) : Configurable {
-    override val prefixed: String get() = "${PREFIX}$value"
+    override val prefixed: String get() = "$PREFIX $value"
     override fun toString(): String = "Verified($value)"
 
     companion object {
-        const val PREFIX = "!"
+        const val PREFIX = "(!)"
     }
 }
 
@@ -64,11 +60,11 @@ object ConfigurableSerializer : KSerializer<Configurable> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Configurable", PrimitiveKind.STRING)
     override fun serialize(encoder: Encoder, it: Configurable) = encoder.encodeString(it.prefixed)
     override fun deserialize(decoder: Decoder): Configurable = when (val it = decoder.decodeString()) {
-        "%EXCLUDED%" -> Excluded
+        "/EXCLUDED/" -> Excluded
         else -> when {
-            it.startsWith(Verified.PREFIX) -> Verified(it.drop(1))
-            it.startsWith(Uncertain.PREFIX) -> Uncertain(it.drop(1))
-            else -> Overridden(it)
+            it.startsWith(Verified.PREFIX) -> Verified(it.removePrefix(Verified.PREFIX).trim())
+            it.startsWith(Uncertain.PREFIX) -> Uncertain(it.removePrefix(Uncertain.PREFIX).trim())
+            else -> Overridden(it.trim())
         }
     }
 }

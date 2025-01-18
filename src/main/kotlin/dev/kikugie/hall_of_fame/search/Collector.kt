@@ -44,10 +44,10 @@ object Collector {
 
     private fun SearchEntry.patch(override: SearchEntry) {
         if (!override.valid) valid = false then return
-        name = override.name
-        source = override.source
-        modrinth = override.modrinth
-        curseforge = override.curseforge
+        if (override.name.isKnown) name = override.name
+        if (override.source.isKnown) source = override.source
+        if (override.modrinth.isKnown) modrinth = override.modrinth
+        if (override.curseforge.isKnown) curseforge = override.curseforge
     }
 
     private fun SearchEntry.patch(info: ProjectInfo) {
@@ -83,5 +83,8 @@ object Collector {
         curseforge = if (entry.curseforge.let { it.isKnown && it !is Excluded }) entry.curseforge.value else curseforge,
     ).also {
         it.internal.putAll(this@apply.internal)
+        entry.internal["downloads"] = it.downloads.toString()
+        entry.internal["updated"] = it.updated.toString()
+        entry.internal["icon"] = it.icon
     }
 }
