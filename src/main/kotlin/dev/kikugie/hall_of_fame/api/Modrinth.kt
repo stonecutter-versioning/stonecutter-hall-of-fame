@@ -6,7 +6,7 @@ import dev.kikugie.hall_of_fame.search.Excluded
 import dev.kikugie.hall_of_fame.search.ProjectInfo
 import dev.kikugie.hall_of_fame.search.SearchEntry
 import dev.kikugie.hall_of_fame.search.SearchID
-import dev.kikugie.hall_of_fame.similarTo
+import dev.kikugie.hall_of_fame.sim
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -91,13 +91,28 @@ object Modrinth {
             entry.log(red, "Modrinth search failed: ${it.stackTraceToString()}")
             return null
         }
-        return result.hits.firstOrNull { mod similarTo it.slug || mod similarTo it.title } ?: run {
+        return result.hits.findMatching(entry, mod) ?: run {
             collector.getOrPut(entry.id) { mutableSetOf() } += result.hits.map { "${it.title} (${it.url})" }
             null
         }
     }
 
     private val SearchEntry.slug get() = modrinth.takeIf { it.isKnown }?.value?.substringAfterLast('/')
+
+    private fun Iterable<ModrinthProject>.findMatching(entry: SearchEntry, mod: String): ModrinthProject? {
+        var min = Int.MAX_VALUE
+        var best: ModrinthProject? = null
+        for (project in this) {
+            if (entry.source.isKnown && entry.source.value == project.sourceUrl)
+                return project
+            val new = minOf(min, mod sim project.slug, mod sim project.title)
+            if (new < min) {
+                min = new
+                best = project
+            }
+        }
+        return best?.takeIf { min <= 3 }
+    }
 
     @Serializable
     private data class ModrinthSearch(val hits: List<ModrinthProject>)

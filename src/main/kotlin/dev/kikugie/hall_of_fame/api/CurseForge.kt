@@ -6,7 +6,7 @@ import dev.kikugie.hall_of_fame.search.Excluded
 import dev.kikugie.hall_of_fame.search.ProjectInfo
 import dev.kikugie.hall_of_fame.search.SearchEntry
 import dev.kikugie.hall_of_fame.search.SearchID
-import dev.kikugie.hall_of_fame.similarTo
+import dev.kikugie.hall_of_fame.sim
 import dev.kikugie.hall_of_fame.string
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -113,7 +113,7 @@ object CurseForge {
             entry.log(red, "CurseForge search error: ${it.stackTraceToString()}")
             return null
         }
-        return result.data.firstOrNull { (mod similarTo it.slug || mod similarTo it.name) && it.isValid } ?: run {
+        return result.data.findMatching(entry, mod) ?: run {
             collector.getOrPut(entry.id) { mutableSetOf() } += result.data.map { "${it.name} (${it.url})" }
             null
         }
@@ -125,6 +125,21 @@ object CurseForge {
         set(value) {
             internal["curseforge_id"] = value!!.toString()
         }
+
+    private fun Iterable<CurseforgeProject>.findMatching(entry: SearchEntry, mod: String): CurseforgeProject? {
+        var min = Int.MAX_VALUE
+        var best: CurseforgeProject? = null
+        for (project in filter(CurseforgeProject::isValid)) {
+            if (entry.source.isKnown && entry.source.value == project.sourceUrl)
+                return project
+            val new = minOf(min, mod sim project.slug, mod sim project.name)
+            if (new < min) {
+                min = new
+                best = project
+            }
+        }
+        return best?.takeIf { min <= 3 }
+    }
 
     @Serializable
     private data class CurseforgeSearch(val data: List<CurseforgeProject>)
@@ -141,6 +156,7 @@ object CurseForge {
         val links: JsonObject?,
     ) {
         val url get() = links?.get("websiteUrl")?.string ?: "https://www.curseforge.com/minecraft/mc-mods/$slug"
+        val sourceUrl get() = links?.get("sourceUrl")?.toString()
         val isValid get() = url.let { "mc-mods" in it || "bukkit-plugins" in it }
 
         fun toInfo() = ProjectInfo(
@@ -149,7 +165,7 @@ object CurseForge {
             icon = (logo?.get("url") as? JsonPrimitive)?.string ?: "",
             updated = Instant.parse(dateModified),
             downloads = downloadCount,
-            source = links?.get("sourceUrl").toString(),
+            source = sourceUrl,
             modrinth = null,
             curseforge = url
         ).apply {

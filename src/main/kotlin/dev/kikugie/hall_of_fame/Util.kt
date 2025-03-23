@@ -39,19 +39,13 @@ private fun String.spaceCapitals() = mapIndexed { index, char ->
     } else char.toString()
 }.joinToString("")
 
-infix fun String.similarTo(other: String) = similarity(other) >= 0.85
-
 private fun String.raw() = lowercase()
     .replace("-", "")
     .replace("_", "")
     .replace(" ", "")
 
-private fun String.similarity(other: String): Double {
-    val r1 = raw()
-    val r2 = other.raw()
-    val distance = LevenshteinDistance().apply(r1, r2)
-    return 1.0 - distance / max(r1.length, r2.length).toDouble()
-}
+infix fun String.sim(other: String): Int =
+    LevenshteinDistance.getDefaultInstance().apply(this.raw(), other.raw())
 
 inline fun <T> Iterable<T>.toArrayString(crossinline transform: (T) -> CharSequence = { it.toString() }) =
     joinToString(", ", "[", "]") { transform(it) }
