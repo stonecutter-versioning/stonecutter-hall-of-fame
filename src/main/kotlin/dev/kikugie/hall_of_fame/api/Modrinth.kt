@@ -103,7 +103,7 @@ object Modrinth {
         var min = Int.MAX_VALUE
         var best: ModrinthProject? = null
         for (project in this) {
-            if (entry.source.isKnown && entry.source.value == project.sourceUrl)
+            if (entry.source.value == project.sourceUrl)
                 return project
             val new = minOf(min, mod sim project.slug, mod sim project.title)
             if (new < min) {
@@ -111,7 +111,7 @@ object Modrinth {
                 best = project
             }
         }
-        return best?.takeIf { min <= 3 }
+        return best?.takeIf { min <= 1 }
     }
 
     @Serializable

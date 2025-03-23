@@ -130,7 +130,7 @@ object CurseForge {
         var min = Int.MAX_VALUE
         var best: CurseforgeProject? = null
         for (project in filter(CurseforgeProject::isValid)) {
-            if (entry.source.isKnown && entry.source.value == project.sourceUrl)
+            if (entry.source.value == project.sourceUrl)
                 return project
             val new = minOf(min, mod sim project.slug, mod sim project.name)
             if (new < min) {
@@ -138,7 +138,7 @@ object CurseForge {
                 best = project
             }
         }
-        return best?.takeIf { min <= 3 }
+        return best?.takeIf { min <= 1 }
     }
 
     @Serializable
