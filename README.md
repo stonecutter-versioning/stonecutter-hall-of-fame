@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> Stonecutter has moved to [Codeberg](https://codeberg.org/stonecutter/docs).
+> This repository will not be updated.
+
 # Stonecutter Hall of Fame
 
 Utility project for the [Stonecutter homepage](https://stonecutter.kikugie.dev/) that collects mods using it.
